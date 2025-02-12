@@ -54,8 +54,8 @@ async function uploadToGoogleDrive(fileBuffer, fileName, mimeType) {
     });
 
     return {
-      name: fileName,
-      google_drive_link: response.data.webViewLink,
+      fileUrl: response.data.webViewLink,
+      title: fileName,
     };
   } catch (error) {
     console.error(`Error uploading file ${fileName}:`, error);
