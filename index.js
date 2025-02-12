@@ -42,41 +42,61 @@ async function uploadToGoogleDrive(fileBuffer, fileName, mimeType) {
       fields: "id, webViewLink",
     });
 
-    return response.data.webViewLink;
+    console.log(`Uploaded ${fileName} successfully: ${response.data.webViewLink}`);
+
+    // Atur izin agar file dapat diakses oleh Google Calendar
+    await drive.permissions.create({
+      fileId: response.data.id,
+      requestBody: {
+        role: "reader",
+        type: "anyone",
+      },
+    });
+
+    return {
+      name: fileName,
+      google_drive_link: response.data.webViewLink,
+    };
   } catch (error) {
-    console.error("Error uploading file:", error);
-    throw new Error("Failed to upload file to Google Drive.");
+    console.error(`Error uploading file ${fileName}:`, error);
+    return null;
   }
 }
 
 /**
- * Endpoint untuk menerima URL AWS S3 dan mengunggah file ke Google Drive
+ * Endpoint untuk menerima array `array_attachment` dari middleware API
  */
 app.post("/upload", async (req, res) => {
   try {
-    const { awsUrl } = req.body;
-    console.log("Received AWS URL:", awsUrl);
+    const { array_attachment } = req.body;
 
-    if (!awsUrl) {
-      console.error("Error: AWS URL is missing");
-      return res.status(400).json({ error: "AWS URL is required" });
+    if (!array_attachment || !Array.isArray(array_attachment)) {
+      return res.status(400).json({ error: "Invalid request format" });
     }
 
-    // Fetch file dari AWS S3
-    console.log("Fetching file from AWS...");
-    const response = await axios.get(awsUrl, { responseType: "arraybuffer" });
-    console.log("File fetched successfully.");
+    console.log("Received attachments:", array_attachment);
 
-    const fileName = awsUrl.split("/").pop();
-    const mimeType = response.headers["content-type"];
-    const fileBuffer = Buffer.from(response.data);
+    const uploadResults = await Promise.all(
+      array_attachment.map(async (attachment) => {
+        try {
+          console.log(`Fetching file from AWS: ${attachment.url}`);
+          const response = await axios.get(attachment.url, { responseType: "arraybuffer" });
 
-    // Upload ke Google Drive
-    console.log("Uploading file to Google Drive...");
-    const googleDriveLink = await uploadToGoogleDrive(fileBuffer, fileName, mimeType);
-    console.log("File uploaded successfully:", googleDriveLink);
+          const fileName = attachment.name;
+          const mimeType = response.headers["content-type"];
+          const fileBuffer = Buffer.from(response.data);
 
-    return res.json({ googleDriveLink });
+          return await uploadToGoogleDrive(fileBuffer, fileName, mimeType);
+        } catch (error) {
+          console.error(`Failed to process file ${attachment.name}:`, error);
+          return null;
+        }
+      })
+    );
+
+    const filteredResults = uploadResults.filter((result) => result !== null);
+
+    res.json({ status: "success", uploaded_files: filteredResults });
   } catch (error) {
     console.error("Error processing request:", error);
     res.status(500).json({ error: "Failed to process request" });
