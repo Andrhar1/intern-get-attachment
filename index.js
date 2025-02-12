@@ -26,7 +26,6 @@ async function uploadToGoogleDrive(fileBuffer, fileName, mimeType) {
       parents: [process.env.GOOGLE_FOLDER_ID],
     };
 
-    // Ubah buffer menjadi stream agar kompatibel dengan Google Drive API
     const bufferStream = new Readable();
     bufferStream.push(fileBuffer);
     bufferStream.push(null);
@@ -44,7 +43,7 @@ async function uploadToGoogleDrive(fileBuffer, fileName, mimeType) {
 
     console.log(`Uploaded ${fileName} successfully: ${response.data.webViewLink}`);
 
-    // Atur izin agar file dapat diakses oleh Google Calendar
+    // Set permission agar file bisa diakses oleh Google Calendar
     await drive.permissions.create({
       fileId: response.data.id,
       requestBody: {
@@ -64,20 +63,20 @@ async function uploadToGoogleDrive(fileBuffer, fileName, mimeType) {
 }
 
 /**
- * Endpoint untuk menerima array `array_attachment` dari middleware API
+ * Endpoint untuk menerima array attachment tanpa key "array_attachment"
  */
 app.post("/upload", async (req, res) => {
   try {
-    const { array_attachment } = req.body;
+    const attachments = req.body;
 
-    if (!array_attachment || !Array.isArray(array_attachment)) {
+    if (!attachments || !Array.isArray(attachments)) {
       return res.status(400).json({ error: "Invalid request format" });
     }
 
-    console.log("Received attachments:", array_attachment);
+    console.log("Received attachments:", attachments);
 
     const uploadResults = await Promise.all(
-      array_attachment.map(async (attachment) => {
+      attachments.map(async (attachment) => {
         try {
           console.log(`Fetching file from AWS: ${attachment.url}`);
           const response = await axios.get(attachment.url, { responseType: "arraybuffer" });
